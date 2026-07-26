@@ -1,51 +1,69 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Enum, Table, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Enum, Table, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-import enum
 from app.core.database import Base
+import enum
 
 class ContentType(enum.Enum):
     MUSIC = "music"
     GAME = "game"
     MOVIE = "movie"
     BOOK = "book"
-    
+
+class ContentPlatform(enum.Enum):
+    SPOTIFY = "spotify"
+    STEAM = "steam"
+    TMDB = "tmdb"
+    GOODREADS = "goodreads"
+    MANUAL = "manual"
+
 class Genre(Base):
     __tablename__ = "genres"
     
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    category = Column(String, index=True)
+    id = Column(Integer, primary_key=True)
+    name = Column(String, unique=True, nullable=False)
+    category = Column(Enum(ContentType))
+    description = Column(String)
     
-    #Relationships
-    
+    # Relaciones
     contents = relationship("Content", secondary="content_genres", back_populates="genres")
 
 class Content(Base):
     __tablename__ = "contents"
     
-    id = Column(Integer, primary_key=True, index=True)
-    external_id = Column(String, index=True) # API ID from external source
+    id = Column(Integer, primary_key=True)
+    external_id = Column(String, index=True)  # ID en plataforma externa
+    platform = Column(Enum(ContentPlatform))
+    content_type = Column(Enum(ContentType), nullable=False)
+    
     title = Column(String, nullable=False)
     description = Column(String)
-    content_type = Column(Enum(ContentType), nullable=False)
+    cover_image = Column(String)
     release_date = Column(DateTime)
+    
+    # Métricas
     average_rating = Column(Float, default=0)
     popularity_score = Column(Float, default=0)
-    metadata_json = Column(JSON) # Store additional metadata as JSON
+    total_interactions = Column(Integer, default=0)
+    recommendation_score = Column(Float, default=0)
     
-    # Fields specific to content types
-    # Music: artist, album, duration
-    # Game: platform, developer, publisher
-    # Movie: director, cast, duration
-    # Book: author, pages, publisher
+    # Embedding del contenido
+    content_embedding = Column(JSON)  # Vector de 50 dimensiones
+    
+    # Metadatos específicos por tipo
+    metadata = Column(JSON, default={})
+    # Música: {"artist": "...", "album": "...", "duration": 180}
+    # Juego: {"developer": "...", "publisher": "...", "platforms": ["PC"]}
+    # Película: {"director": "...", "cast": ["..."], "duration": 120}
+    # Libro: {"author": "...", "pages": 300, "publisher": "..."}
     
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    #Relationships
-    
+    # Relaciones
     genres = relationship("Genre", secondary="content_genres", back_populates="contents")
+    interactions = relationship("Interaction", back_populates="content", cascade="all, delete-orphan")
+    reviews = relationship("Review", back_populates="content", cascade="all, delete-orphan")
 
 class ContentGenre(Base):
     __tablename__ = "content_genres"
