@@ -2,6 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 import asyncio
 from datetime import datetime, timedelta
+from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
