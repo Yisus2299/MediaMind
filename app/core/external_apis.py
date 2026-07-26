@@ -1,7 +1,7 @@
 import httpx
 import asyncio
 from typing import List, Dict, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from app.core.config import settings
 from app.models.content import ContentType, ContentPlatform
 
