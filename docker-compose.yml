@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # PostgreSQL - Base de datos principal
+  db:
+    image: postgres:15-alpine
+    container_name: mediamind_db
+    environment:
+      POSTGRES_USER: mediamind
+      POSTGRES_PASSWORD: mediamind123
+      POSTGRES_DB: mediamind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mediamind_network
+
+  # Redis - Caché y colas
+  redis:
+    image: redis:7-alpine
+    container_name: mediamind_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - mediamind_network
+    command: redis-server --appendonly yes
+
+  # API FastAPI
+  api:
+    build: .
+    container_name: mediamind_api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mediamind:mediamind123@db:5432/mediamind
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - mediamind_network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker - Tareas asíncronas
+  celery:
+    build: .
+    container_name: mediamind_celery
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mediamind:mediamind123@db:5432/mediamind
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - mediamind_network
+    command: celery -A app.tasks.worker worker --loglevel=info
+
+  # Celery Beat - Tareas programadas
+  celery_beat:
+    build: .
+    container_name: mediamind_celery_beat
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    networks:
+      - mediamind_network
+    command: celery -A app.tasks.worker beat --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  mediamind_network:
+    driver: bridge
