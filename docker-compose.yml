@@ -1,85 +1,161 @@
-version: '3.8'
-
 services:
-  # PostgreSQL - Base de datos principal
+  # ============ BASE DE DATOS ============
   db:
-    image: postgres:15-alpine
+    image: postgres:15-alpine  # ~200MB
     container_name: mediamind_db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: mediamind
       POSTGRES_PASSWORD: mediamind123
       POSTGRES_DB: mediamind
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --data-checksums"
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - mediamind_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mediamind -d mediamind"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
-  # Redis - Caché y colas
+  # ============ REDIS ============
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine  # ~30MB
     container_name: mediamind_redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
       - mediamind_network
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
 
-  # API FastAPI
+  # ============ API ============
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mediamind-api:latest
     container_name: mediamind_api
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://mediamind:mediamind123@db:5432/mediamind
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      PYTHONPATH: /app
+      UVICORN_WORKERS: "2"
+      CELERY_CONCURRENCY: "2"
+      DEBUG: "false"  # Desactivar debug en producción
+      SQLALCHEMY_POOL_SIZE: "5"
+      SQLALCHEMY_MAX_OVERFLOW: "10"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
-      - .:/app
+      - ./app:/app  # Solo montar código, no toda la carpeta
     networks:
       - mediamind_network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
-  # Celery Worker - Tareas asíncronas
+  # ============ CELERY WORKER ============
   celery:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mediamind-celery:latest
     container_name: mediamind_celery
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://mediamind:mediamind123@db:5432/mediamind
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      PYTHONPATH: /app
+      UVICORN_WORKERS: "2"
+      CELERY_CONCURRENCY: "2"
+      DEBUG: "false"
+      SQLALCHEMY_POOL_SIZE: "5"
+      SQLALCHEMY_MAX_OVERFLOW: "10"
     depends_on:
       - db
       - redis
     volumes:
-      - .:/app
+      - ./app:/app
     networks:
       - mediamind_network
-    command: celery -A app.tasks.worker worker --loglevel=info
+    command: celery -A app.tasks.worker worker --loglevel=warning --concurrency=2
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
 
-  # Celery Beat - Tareas programadas
+  # ============ CELERY BEAT (Opcional - lo puedes quitar) ============
   celery_beat:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mediamind-celery_beat:latest
     container_name: mediamind_celery_beat
+    restart: unless-stopped
     environment:
-      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+      PYTHONPATH: /app
+      UVICORN_WORKERS: "2"
+      CELERY_CONCURRENCY: "2"
+      DEBUG: "false"
+      SQLALCHEMY_POOL_SIZE: "5"
+      SQLALCHEMY_MAX_OVERFLOW: "10"
     depends_on:
       - redis
     volumes:
-      - .:/app
+      - ./app:/app
     networks:
       - mediamind_network
-    command: celery -A app.tasks.worker beat --loglevel=info
+    command: celery -A app.tasks.worker beat --loglevel=warning
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
 
 volumes:
   postgres_data:
+    name: mediamind_postgres_data
   redis_data:
+    name: mediamind_redis_data
 
 networks:
   mediamind_network:
+    name: mediamind_network
     driver: bridge

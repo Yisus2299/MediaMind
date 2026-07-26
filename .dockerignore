@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Desarrollo
+.git/
+.gitignore
+README.md
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Tests
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database local
+*.db
+*.sqlite

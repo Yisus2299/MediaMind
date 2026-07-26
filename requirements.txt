@@ -1,35 +1,29 @@
-# Core
+# Core - Lo mínimo indispensable
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 pydantic==2.5.0
 pydantic-settings==2.1.0
 
-# Database
-sqlalchemy==2.0.51
-asyncpg==0.31.0
+# Database - Solo lo necesario
+sqlalchemy==2.0.23
+asyncpg==0.29.0
 alembic==1.12.1
 redis==5.0.1
 
-# Authentication
+# Auth
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 
-# IA / ML
-scikit-learn==1.9.0
-numpy==2.4.6
-pandas==3.0.5
-tensorflow==2.13.0; python_version < "3.14"  # Opcional, para más adelante (skip on Python 3.14+ because no Windows wheel available)
+# Async tasks - Ligero
+celery==5.3.4
 
-# External APIs
+# ML - Solo lo esencial (sin tensorflow)
+numpy==1.26.2
+scikit-learn==1.3.2
+
+# HTTP Client
 httpx==0.25.1
-aiohttp==3.14.3
 
 # Utils
 python-dotenv==1.0.0
-celery==5.3.4  # Para tareas asíncronas
-flower==1.0.0  # Para monitorear Celery
-
-# Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
