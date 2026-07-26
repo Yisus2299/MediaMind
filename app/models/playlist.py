@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
-# Tabla intermedia para playlist-contents
+# Junction table for playlist contents
 playlist_contents = Table(
     'playlist_contents',
     Base.metadata,
@@ -26,9 +26,6 @@ class Playlist(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Relaciones
+    # Relationships
     user = relationship("User", back_populates="playlists")
     contents = relationship("Content", secondary=playlist_contents, back_populates="playlists")
-
-# Agregar relación en Content
-Content.playlists = relationship("Playlist", secondary=playlist_contents, back_populates="contents")

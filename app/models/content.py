@@ -60,10 +60,11 @@ class Content(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Relaciones
+    # Relationships
     genres = relationship("Genre", secondary="content_genres", back_populates="contents")
     interactions = relationship("Interaction", back_populates="content", cascade="all, delete-orphan")
     reviews = relationship("Review", back_populates="content", cascade="all, delete-orphan")
+    playlists = relationship("Playlist", secondary="playlist_contents", back_populates="contents")
 
 class ContentGenre(Base):
     __tablename__ = "content_genres"
