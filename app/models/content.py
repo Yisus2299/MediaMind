@@ -50,8 +50,8 @@ class Content(Base):
     # Embedding del contenido
     content_embedding = Column(JSON)  # Vector de 50 dimensiones
     
-    # Metadatos específicos por tipo
-    metadata = Column(JSON, default={})
+    # Metadatos específicos por tipo (columna DB: metadata)
+    extra_metadata = Column("metadata", JSON, default=dict)
     # Música: {"artist": "...", "album": "...", "duration": 180}
     # Juego: {"developer": "...", "publisher": "...", "platforms": ["PC"]}
     # Película: {"director": "...", "cast": ["..."], "duration": 120}

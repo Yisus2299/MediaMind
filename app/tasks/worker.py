@@ -250,3 +250,5 @@ async def _generate_user_recommendations(user_id: int):
             from app.core.cache import cache
             cache_key = f"pregen:{user_id}:{content_type.value}"
             await cache.set(cache_key, [c.id for c in recommendations], 3600)  # 1 hora
+
+app = celery_app

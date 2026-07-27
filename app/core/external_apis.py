@@ -66,7 +66,7 @@ class ExternalAPIClient:
                 "cover_image": track["album"]["images"][0]["url"] if track["album"]["images"] else None,
                 "release_date": track["album"]["release_date"],
                 "popularity_score": track["popularity"] / 100,
-                "metadata": {
+                "extra_metadata": {
                     "artist": track["artists"][0]["name"],
                     "album": track["album"]["name"],
                     "duration": track["duration_ms"] / 1000,
@@ -125,7 +125,7 @@ class ExternalAPIClient:
                     "cover_image": details.get("header_image"),
                     "release_date": details.get("release_date", {}).get("date"),
                     "popularity_score": min(1.0, details.get("metacritic", {}).get("score", 50) / 100),
-                    "metadata": {
+                    "extra_metadata": {
                         "developer": details.get("developers", [""])[0],
                         "publisher": details.get("publishers", [""])[0],
                         "platforms": [p for p, v in details.get("platforms", {}).items() if v],
@@ -176,7 +176,7 @@ class ExternalAPIClient:
                 "release_date": movie["release_date"],
                 "popularity_score": min(1.0, movie.get("popularity", 0) / 100),
                 "average_rating": movie.get("vote_average", 0),
-                "metadata": {
+                "extra_metadata": {
                     "director": [],  # Necesitamos otra llamada para créditos
                     "cast": [],
                     "duration": None,
@@ -242,7 +242,7 @@ class ExternalAPIClient:
                 "cover_image": volume.get("imageLinks", {}).get("thumbnail"),
                 "release_date": volume.get("publishedDate"),
                 "popularity_score": 0.5,  # Google no da popularidad
-                "metadata": {
+                "extra_metadata": {
                     "author": ", ".join(volume.get("authors", [])),
                     "publisher": volume.get("publisher"),
                     "pages": volume.get("pageCount"),

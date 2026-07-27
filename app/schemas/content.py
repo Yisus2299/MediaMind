@@ -19,7 +19,7 @@ class ContentBase(BaseModel):
     external_id: Optional[str] = None
 
 class ContentCreate(ContentBase):
-    metadata: Optional[Dict] = None
+    extra_metadata: Optional[Dict] = None
 
 class ContentResponse(ContentBase):
     id: int
@@ -28,7 +28,7 @@ class ContentResponse(ContentBase):
     average_rating: float
     popularity_score: float
     genres: List[GenreResponse]
-    metadata: Dict
+    extra_metadata: Dict
     created_at: datetime
     
     class Config:

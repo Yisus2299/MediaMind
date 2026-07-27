@@ -15,13 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear directorio de trabajo
+# Crear usuario appuser en el builder también
+RUN useradd -m -u 1000 appuser
+
+# Cambiar a appuser para instalar dependencias como él
+USER appuser
 WORKDIR /app
 
-# Copiar requirements primero (para caché)
+# Copiar requirements
 COPY requirements.txt .
 
-# Actualizar pip y luego instalar dependencias en una carpeta temporal
+# Instalar dependencias como appuser en su home
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir --user -r requirements.txt
 
@@ -36,19 +40,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libffi8 \
     && rm -rf /var/lib/apt/lists/*
 
-# Crear usuario no-root
+# Crear usuario no-root (mismo UID que en builder)
 RUN useradd -m -u 1000 appuser
 
 WORKDIR /app
 
-# Copiar dependencias instaladas desde builder
-COPY --from=builder /root/.local /root/.local
+# Copiar las dependencias desde el home de appuser
+COPY --from=builder --chown=appuser:appuser /home/appuser/.local /home/appuser/.local
 
-# Asegurar que pip encuentre los paquetes
-ENV PATH=/root/.local/bin:$PATH \
-    PYTHONPATH=/app \
+# Establecer variables de entorno
+ENV PYTHONPATH=/app \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PATH=/home/appuser/.local/bin:$PATH
 
 # Copiar el código
 COPY --chown=appuser:appuser . .
@@ -59,5 +63,5 @@ USER appuser
 # Exponer puerto
 EXPOSE 8000
 
-# Comando por defecto (se sobreescribe en docker-compose)
+# Comando por defecto
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

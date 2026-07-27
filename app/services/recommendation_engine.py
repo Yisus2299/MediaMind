@@ -9,8 +9,8 @@ import json
 import random
 
 from app.models.user import User
-from app.models.content import Content, ContentType, Genre, Interaction
-from app.models.interaction import InteractionType
+from app.models.content import Content, ContentType, Genre
+from app.models.interaction import Interaction, InteractionType
 from app.core.cache import cache
 from app.core.config import settings
 
@@ -286,7 +286,7 @@ class RecommendationEngine:
                 vector[idx] += 1.0
         
         # Factores de metadatos
-        if content.metadata:
+        if content.extra_metadata:
             # Año de lanzamiento (más reciente = mayor peso)
             if content.release_date:
                 years_old = (datetime.now() - content.release_date).days / 365
