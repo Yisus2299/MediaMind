@@ -26,24 +26,6 @@ app.include_router(interactions.router, prefix="/api/v1", tags=["interactions"])
 app.include_router(search.router, prefix="/api/v1", tags=["search"])
 app.include_router(content.router, prefix="/api/v1", tags=["content"])
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Bienvenido a MediaMind",
-        "version": "1.0.0",
-        "status": "online",
-        "docs": "/docs"
-    }
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "services": {
-            "api": "online",
-            "database": "online"  # Podrías verificar la conexión
-        }
-    }
 
 @app.get("/")
 async def root():
