@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.interaction import Interaction, InteractionType
+from app.models.content import Content
 
 
 class InteractionService:
@@ -44,3 +45,40 @@ class InteractionService:
         )
         result = await self.db.execute(stmt)
         return result.scalars().all()
+
+    @staticmethod
+    def build_demo_interactions(user_id: int, content_ids: List[int]) -> List[dict]:
+        interactions = []
+        for index, content_id in enumerate(content_ids):
+            if index % 3 == 0:
+                interaction_type = InteractionType.LIKE
+                value = None
+            elif index % 3 == 1:
+                interaction_type = InteractionType.RATING
+                value = min(10.0, 7.0 + (index % 3))
+            else:
+                interaction_type = InteractionType.DISLIKE
+                value = None
+
+            interactions.append(
+                {
+                    "user_id": user_id,
+                    "content_id": content_id,
+                    "interaction_type": interaction_type,
+                    "value": value,
+                    "context": {"source": "demo_seed"},
+                }
+            )
+        return interactions
+
+    async def seed_demo_interactions(self, user_id: int, content_ids: List[int]) -> List[Interaction]:
+        created = []
+        for payload in self.build_demo_interactions(user_id, content_ids):
+            interaction = Interaction(**payload)
+            self.db.add(interaction)
+            created.append(interaction)
+
+        await self.db.commit()
+        for interaction in created:
+            await self.db.refresh(interaction)
+        return created
