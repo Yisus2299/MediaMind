@@ -99,7 +99,7 @@ class ExternalAPIClient:
     # ============ STEAM API (Videojuegos) ============
     
     async def search_steam(self, query: str, limit: int = 10) -> List[Dict]:
-        """Buscar juegos en Steam usando la búsqueda pública del store."""
+        """Buscar juegos en Steam usando la API de detalles del store."""
         response = await self.client.get(
             "https://store.steampowered.com/search/",
             params={"term": query, "category1": "998", "supportedlang": "english"},
@@ -108,15 +108,18 @@ class ExternalAPIClient:
         response.raise_for_status()
 
         html = response.text
+        search_results = self._extract_steam_search_results(html, limit)
         games = []
-        for item in self._extract_steam_results(html, limit):
-            details = await self.get_steam_game_details(int(item["id"]))
-            title = details.get("name") or item["title"]
-            description = details.get("short_description") or item.get("description", "")
+
+        for item in search_results:
+            app_id = item["id"]
+            details = await self.get_steam_game_details(int(app_id))
+            title = item.get("title") or details.get("name") or f"Steam App {app_id}"
+            description = details.get("short_description") or item.get("description") or ""
             cover_image = details.get("header_image") or item.get("cover_image")
 
             games.append({
-                "external_id": item["id"],
+                "external_id": app_id,
                 "platform": ContentPlatform.STEAM,
                 "content_type": ContentType.GAME,
                 "title": title,
@@ -132,24 +135,86 @@ class ExternalAPIClient:
 
         return games
 
-    def _extract_steam_results(self, html: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Extrae app IDs básicos de la búsqueda de Steam desde el HTML."""
+    def _extract_steam_search_results(self, html: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Extrae resultados de búsqueda de Steam con id, título y descripción desde el HTML."""
         import re
 
         results: List[Dict[str, Any]] = []
         seen = set()
 
+        for match in re.finditer(
+            r'<(?P<tag>a|div)[^>]*class="[^"]*search_result_row[^"]*"[^>]*data-ds-appid="(?P<app_id>\d+)"[^>]*>(?P<content>.*?)</(?P=tag)>',
+            html,
+            re.S,
+        ):
+            app_id = match.group("app_id")
+            if app_id in seen:
+                continue
+            seen.add(app_id)
+
+            block = match.group("content")
+            title = self._extract_steam_title(block, app_id)
+            description = self._extract_steam_description(block)
+
+            results.append({"id": app_id, "title": title, "description": description, "cover_image": None})
+            if len(results) >= limit:
+                return results
+
+        if results:
+            return results
+
         for pattern in [r'data-ds-appid="(\d+)"', r'app/(\d+)/']:
-            matches = re.findall(pattern, html)
-            for app_id in matches:
-                if app_id in seen:
-                    continue
-                seen.add(app_id)
-                results.append({"id": app_id, "title": f"Steam App {app_id}", "description": "", "cover_image": None})
-                if len(results) >= limit:
-                    return results
+            for app_id in re.findall(pattern, html):
+                if app_id not in seen:
+                    seen.add(app_id)
+                    results.append({"id": app_id, "title": f"Steam App {app_id}", "description": "", "cover_image": None})
+                    if len(results) >= limit:
+                        return results
 
         return results
+
+    def _extract_steam_title(self, block: str, app_id: str) -> str:
+        """Extrae el título del bloque HTML de Steam."""
+        import re
+
+        title_patterns = [
+            r'<span[^>]*class="[^"]*title[^"]*"[^>]*>(.*?)</span>',
+            r'<div[^>]*class="[^"]*title[^"]*"[^>]*>(.*?)</div>',
+            r'<h4[^>]*>(.*?)</h4>',
+            r'<h3[^>]*>(.*?)</h3>',
+            r'<a[^>]*>(.*?)</a>',
+        ]
+
+        for pattern in title_patterns:
+            title_match = re.search(pattern, block, re.S | re.I)
+            if title_match:
+                title = re.sub(r'<[^>]+>', '', title_match.group(1))
+                title = re.sub(r'\s+', ' ', title).strip()
+                if title:
+                    return title
+
+        return f"Steam App {app_id}"
+
+    def _extract_steam_description(self, block: str) -> str:
+        """Extrae una descripción breve del bloque HTML de Steam."""
+        import re
+
+        description_patterns = [
+            r'<div[^>]*class="[^"]*search_review_summary[^"]*"[^>]*>(.*?)</div>',
+            r'<div[^>]*class="[^"]*search_review_summary[^"]*"[^>]*>(.*?)</span>',
+            r'<div[^>]*class="[^"]*search_price[^"]*"[^>]*>(.*?)</div>',
+            r'<div[^>]*class="[^"]*search_desc[^"]*"[^>]*>(.*?)</div>',
+        ]
+
+        for pattern in description_patterns:
+            description_match = re.search(pattern, block, re.S | re.I)
+            if description_match:
+                description = re.sub(r'<[^>]+>', '', description_match.group(1))
+                description = re.sub(r'\s+', ' ', description).strip()
+                if description:
+                    return description
+
+        return ""
     
     async def get_steam_game_details(self, app_id: int) -> Dict:
         """Obtener detalles de un juego en Steam"""
