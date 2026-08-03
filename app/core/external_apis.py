@@ -110,13 +110,18 @@ class ExternalAPIClient:
         html = response.text
         games = []
         for item in self._extract_steam_results(html, limit):
+            details = await self.get_steam_game_details(int(item["id"]))
+            title = details.get("name") or item["title"]
+            description = details.get("short_description") or item.get("description", "")
+            cover_image = details.get("header_image") or item.get("cover_image")
+
             games.append({
                 "external_id": item["id"],
                 "platform": ContentPlatform.STEAM,
                 "content_type": ContentType.GAME,
-                "title": item["title"],
-                "description": item.get("description", ""),
-                "cover_image": item.get("cover_image"),
+                "title": title,
+                "description": description,
+                "cover_image": cover_image,
                 "release_date": None,
                 "popularity_score": 0.5,
                 "extra_metadata": {
@@ -128,32 +133,21 @@ class ExternalAPIClient:
         return games
 
     def _extract_steam_results(self, html: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Extrae resultados básicos de la búsqueda de Steam desde el HTML."""
+        """Extrae app IDs básicos de la búsqueda de Steam desde el HTML."""
         import re
 
         results: List[Dict[str, Any]] = []
-        pattern = re.compile(r"app/(\d+)/")
-        matches = pattern.findall(html)
         seen = set()
 
-        for app_id in matches:
-            if app_id in seen:
-                continue
-            seen.add(app_id)
-            title_match = re.search(rf'app/{app_id}/[^\"]+?\"[^\"]*?title\":\s*\"([^\"]+)\"', html)
-            if title_match:
-                title = title_match.group(1)
-            else:
-                title = f"Steam App {app_id}"
-
-            results.append({
-                "id": app_id,
-                "title": title,
-                "description": "",
-                "cover_image": None,
-            })
-            if len(results) >= limit:
-                break
+        for pattern in [r'data-ds-appid="(\d+)"', r'app/(\d+)/']:
+            matches = re.findall(pattern, html)
+            for app_id in matches:
+                if app_id in seen:
+                    continue
+                seen.add(app_id)
+                results.append({"id": app_id, "title": f"Steam App {app_id}", "description": "", "cover_image": None})
+                if len(results) >= limit:
+                    return results
 
         return results
     
