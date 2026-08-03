@@ -99,42 +99,63 @@ class ExternalAPIClient:
     # ============ STEAM API (Videojuegos) ============
     
     async def search_steam(self, query: str, limit: int = 10) -> List[Dict]:
-        """Buscar juegos en Steam"""
-        # Primero buscar en el store
+        """Buscar juegos en Steam usando la búsqueda pública del store."""
         response = await self.client.get(
-            "https://api.steampowered.com/ISteamApps/GetAppList/v2/"
+            "https://store.steampowered.com/search/",
+            params={"term": query, "category1": "998", "supportedlang": "english"},
+            headers={"User-Agent": "Mozilla/5.0"},
         )
         response.raise_for_status()
-        data = response.json()
-        
-        # Filtrar juegos que coinciden con la búsqueda
-        apps = data.get("applist", {}).get("apps", [])
-        matches = [app for app in apps if query.lower() in app["name"].lower()][:limit]
-        
+
+        html = response.text
         games = []
-        for match in matches:
-            # Obtener detalles del juego
-            details = await self.get_steam_game_details(match["appid"])
-            if details:
-                games.append({
-                    "external_id": str(match["appid"]),
-                    "platform": ContentPlatform.STEAM,
-                    "content_type": ContentType.GAME,
-                    "title": match["name"],
-                    "description": details.get("short_description", ""),
-                    "cover_image": details.get("header_image"),
-                    "release_date": details.get("release_date", {}).get("date"),
-                    "popularity_score": min(1.0, details.get("metacritic", {}).get("score", 50) / 100),
-                    "extra_metadata": {
-                        "developer": details.get("developers", [""])[0],
-                        "publisher": details.get("publishers", [""])[0],
-                        "platforms": [p for p, v in details.get("platforms", {}).items() if v],
-                        "genres": [g["description"] for g in details.get("genres", [])],
-                        "metacritic_score": details.get("metacritic", {}).get("score"),
-                    }
-                })
-        
+        for item in self._extract_steam_results(html, limit):
+            games.append({
+                "external_id": item["id"],
+                "platform": ContentPlatform.STEAM,
+                "content_type": ContentType.GAME,
+                "title": item["title"],
+                "description": item.get("description", ""),
+                "cover_image": item.get("cover_image"),
+                "release_date": None,
+                "popularity_score": 0.5,
+                "extra_metadata": {
+                    "genres": [],
+                    "source": "steam_store_search",
+                },
+            })
+
         return games
+
+    def _extract_steam_results(self, html: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Extrae resultados básicos de la búsqueda de Steam desde el HTML."""
+        import re
+
+        results: List[Dict[str, Any]] = []
+        pattern = re.compile(r"app/(\d+)/")
+        matches = pattern.findall(html)
+        seen = set()
+
+        for app_id in matches:
+            if app_id in seen:
+                continue
+            seen.add(app_id)
+            title_match = re.search(rf'app/{app_id}/[^\"]+?\"[^\"]*?title\":\s*\"([^\"]+)\"', html)
+            if title_match:
+                title = title_match.group(1)
+            else:
+                title = f"Steam App {app_id}"
+
+            results.append({
+                "id": app_id,
+                "title": title,
+                "description": "",
+                "cover_image": None,
+            })
+            if len(results) >= limit:
+                break
+
+        return results
     
     async def get_steam_game_details(self, app_id: int) -> Dict:
         """Obtener detalles de un juego en Steam"""
