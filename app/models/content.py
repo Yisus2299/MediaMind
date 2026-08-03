@@ -8,6 +8,7 @@ class ContentType(enum.Enum):
     MUSIC = "music"
     GAME = "game"
     MOVIE = "movie"
+    SERIES = "series"
     BOOK = "book"
 
 class ContentPlatform(enum.Enum):

@@ -114,7 +114,11 @@ class ExternalAPIClient:
         for item in search_results:
             app_id = item["id"]
             details = await self.get_steam_game_details(int(app_id))
-            title = item.get("title") or details.get("name") or f"Steam App {app_id}"
+            title = item.get("title") or details.get("name") or ""
+            if not title or title.startswith("Steam App"):
+                title = await self._get_steam_title_from_store(int(app_id)) or title
+            if not title or title.startswith("Steam App"):
+                title = f"Steam App {app_id}"
             description = details.get("short_description") or item.get("description") or ""
             cover_image = details.get("header_image") or item.get("cover_image")
 
@@ -143,16 +147,17 @@ class ExternalAPIClient:
         seen = set()
 
         for match in re.finditer(
-            r'<(?P<tag>a|div)[^>]*class="[^"]*search_result_row[^"]*"[^>]*data-ds-appid="(?P<app_id>\d+)"[^>]*>(?P<content>.*?)</(?P=tag)>',
+            r'data-ds-appid="(?P<app_id>\d+)"',
             html,
-            re.S,
         ):
             app_id = match.group("app_id")
             if app_id in seen:
                 continue
             seen.add(app_id)
 
-            block = match.group("content")
+            start = max(0, match.start() - 200)
+            end = min(len(html), match.end() + 1200)
+            block = html[start:end]
             title = self._extract_steam_title(block, app_id)
             description = self._extract_steam_description(block)
 
@@ -163,7 +168,7 @@ class ExternalAPIClient:
         if results:
             return results
 
-        for pattern in [r'data-ds-appid="(\d+)"', r'app/(\d+)/']:
+        for pattern in [r'app/(\d+)/']:
             for app_id in re.findall(pattern, html):
                 if app_id not in seen:
                     seen.add(app_id)
@@ -220,14 +225,36 @@ class ExternalAPIClient:
         """Obtener detalles de un juego en Steam"""
         response = await self.client.get(
             "https://store.steampowered.com/api/appdetails",
-            params={"appids": app_id}
+            params={"appids": app_id, "l": "english"},
+            headers={"User-Agent": "Mozilla/5.0"},
         )
         response.raise_for_status()
         data = response.json()
-        
+
         if str(app_id) in data and data[str(app_id)].get("success"):
             return data[str(app_id)]["data"]
         return {}
+
+    async def _get_steam_title_from_store(self, app_id: int) -> str:
+        import re
+
+        response = await self.client.get(
+            f"https://store.steampowered.com/app/{app_id}/",
+            headers={"User-Agent": "Mozilla/5.0"},
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        html = response.text
+        for pattern in [
+            r'<meta property="og:title" content="([^"]+)"',
+            r'<title>([^<]+?)\s+on Steam',
+        ]:
+            match = re.search(pattern, html, re.I)
+            if match:
+                title = match.group(1).strip()
+                if title and not title.startswith("Steam App"):
+                    return title
+        return ""
     
     # ============ TMDB API (Películas) ============
     
@@ -266,6 +293,31 @@ class ExternalAPIClient:
             })
         
         return movies
+
+    async def search_tmdb_tv(self, query: str, limit: int = 10) -> List[Dict]:
+        """Buscar series en TMDB"""
+        response = await self.client.get(
+            "https://api.themoviedb.org/3/search/tv",
+            params={"api_key": settings.TMDB_API_KEY, "query": query},
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        series = []
+        for show in data.get("results", [])[:limit]:
+            series.append({
+                "external_id": str(show["id"]),
+                "platform": ContentPlatform.TMDB,
+                "content_type": ContentType.SERIES,
+                "title": show["name"],
+                "description": show.get("overview", ""),
+                "cover_image": f"https://image.tmdb.org/t/p/w500{show['poster_path']}" if show.get("poster_path") else None,
+                "release_date": show.get("first_air_date"),
+                "popularity_score": min(1.0, show.get("popularity", 0) / 100),
+                "average_rating": show.get("vote_average", 0),
+                "extra_metadata": {"genres": []},
+            })
+        return series
     
     async def get_tmdb_movie_details(self, movie_id: int) -> Dict:
         """Obtener detalles de una película en TMDB"""
@@ -362,6 +414,11 @@ class ExternalAPIClient:
             search_tasks.append(self.search_tmdb(query, limit_per_type))
         else:
             search_tasks.append(asyncio.sleep(0, result=[]))
+
+        if not content_types or ContentType.SERIES in content_types:
+            search_tasks.append(self.search_tmdb_tv(query, limit_per_type))
+        else:
+            search_tasks.append(asyncio.sleep(0, result=[]))
         
         if not content_types or ContentType.BOOK in content_types:
             search_tasks.append(self.search_goodreads(query, limit_per_type))
@@ -369,7 +426,7 @@ class ExternalAPIClient:
             search_tasks.append(asyncio.sleep(0, result=[]))
         
         # Ejecutar en paralelo
-        spotify_results, steam_results, tmdb_results, goodreads_results = await asyncio.gather(
+        spotify_results, steam_results, tmdb_results, tmdb_tv_results, goodreads_results = await asyncio.gather(
             *search_tasks, return_exceptions=True
         )
         
@@ -380,6 +437,8 @@ class ExternalAPIClient:
             results[ContentType.GAME] = steam_results
         if isinstance(tmdb_results, list):
             results[ContentType.MOVIE] = tmdb_results
+        if isinstance(tmdb_tv_results, list):
+            results[ContentType.SERIES] = tmdb_tv_results
         if isinstance(goodreads_results, list):
             results[ContentType.BOOK] = goodreads_results
         

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Importar routers
-from app.api.v1 import auth, recommendations, interactions, search, content
+from app.api.v1 import auth, recommendations, interactions, search, content, onboarding
 
 app = FastAPI(
     title="MediaMind API",
@@ -25,6 +25,7 @@ app.include_router(recommendations.router, prefix="/api/v1", tags=["recommendati
 app.include_router(interactions.router, prefix="/api/v1", tags=["interactions"])
 app.include_router(search.router, prefix="/api/v1", tags=["search"])
 app.include_router(content.router, prefix="/api/v1", tags=["content"])
+app.include_router(onboarding.router, prefix="/api/v1", tags=["onboarding"])
 
 
 @app.get("/")

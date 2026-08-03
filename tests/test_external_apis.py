@@ -15,6 +15,7 @@ class SteamSearchParsingTests(unittest.TestCase):
             MUSIC = "music"
             GAME = "game"
             MOVIE = "movie"
+            SERIES = "series"
 
         class FakeContentPlatform:
             SPOTIFY = "spotify"
